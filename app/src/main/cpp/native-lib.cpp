@@ -18,10 +18,7 @@
 namespace {
 constexpr const char *kTag = "FuzzMeNative";
 constexpr const char *kCrashNeedle = "FuzzMe@123";
-constexpr size_t kCrashNeedleLen = 10;
 constexpr size_t kMaxPayload = 8192;
-constexpr size_t kEventQueueLimit = 50;
-constexpr useconds_t kReadTimeoutUs = 500000;
 
 std::atomic<bool> gRunning{false};
 int gListenFd = -1;
@@ -40,18 +37,21 @@ void triggerCrash() {
     *ptr = 0x1337;
 }
 
-bool hasCrashPrefix(const uint8_t *buffer, uint64_t length) {
-    static constexpr uint8_t kPattern[kCrashNeedleLen] = {
-            'F', 'u', 'z', 'z', 'M', 'e', '@', '1', '2', '3'
-    };
-    return buffer != nullptr && length >= kCrashNeedleLen
-           && memcmp(buffer, kPattern, kCrashNeedleLen) == 0;
-}
-
 extern "C" void fuzzMe(const uint8_t *buffer, uint64_t length) {
-    if (hasCrashPrefix(buffer, length)) {
-        triggerCrash();
+    if (buffer == nullptr || length < 10) {
+        return;
     }
+    if (buffer[0] == 'F')
+        if (buffer[1] == 'u')
+            if (buffer[2] == 'z')
+                if (buffer[3] == 'z')
+                    if (buffer[4] == 'M')
+                        if (buffer[5] == 'e')
+                            if (buffer[6] == '@')
+                                if (buffer[7] == '1')
+                                    if (buffer[8] == '2')
+                                        if (buffer[9] == '3')
+                                            triggerCrash();
 }
 
 void closeFd(int &fd) {
@@ -118,7 +118,7 @@ void serverLoop(int port) {
                     + std::to_string(peerPort)
                     + " -> 0.0.0.0:"
                     + std::to_string(port));
-            if (gConnectionEvents.size() > kEventQueueLimit) {
+            if (gConnectionEvents.size() > 50) {
                 gConnectionEvents.pop_front();
             }
         }
@@ -133,7 +133,7 @@ void serverLoop(int port) {
         // Avoid blocking forever waiting for peer close.
         timeval tv{};
         tv.tv_sec = 0;
-        tv.tv_usec = kReadTimeoutUs;  // 500ms
+        tv.tv_usec = 500000;  // 500ms
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
         char buf[512];
